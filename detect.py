@@ -138,6 +138,7 @@ class YoloDetection():
         # Run inference
         self.model.warmup(imgsz=(1 if self.pt or self.model.triton else bs, 3, *self.imgsz))  # warmup
         seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
+        result_list = []
         for path, im, im0s, vid_cap, s in dataset:
             with dt[0]:
                 im = torch.from_numpy(im).to(self.model.device)
@@ -191,14 +192,19 @@ class YoloDetection():
                     # Saves time in .txt file containing bbox, confidences and classes
                     if save_bbox_conf_cls:
                         with open(f'{info_path}','a') as f:
+                            time = f"{date.strftime('%Y%m%d%H%M%S%f')[:-3]}"
                             f.write(f"{date.strftime('%Y%m%d%H%M%S%f')[:-3]}\n")
-
+                    
+                    det_list = []
                     for j, (*xyxy, conf, cls) in enumerate(reversed(det)):
                         if save_bbox_conf_cls:  # Write bbox, confidences and classes to file
                             with open(f'{info_path}','a') as f:
+                                det_string = ''
                                 for value in range(len(det[j,:6])):
+                                    det_string += str(det[j,:6][value].item())+' '
                                     f.write(str(det[j,:6][value].item())+' ')
                                 f.write("\n")
+                                det_list.append(det_string)
 
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
@@ -242,6 +248,8 @@ class YoloDetection():
                             vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                         vid_writer[i].write(im0)
 
+                result_list.append(det_list)
+
             # Print time (inference-only)
             LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1E3:.1f}ms")
 
@@ -253,6 +261,8 @@ class YoloDetection():
             LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
         if update:
             strip_optimizer(weights[0])  # update model (to fix SourceChangeWarning)
+
+        return time, result_list
 
 
 def parse_opt():
@@ -293,7 +303,7 @@ def parse_opt():
 
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
-    YoloDetection().run(**vars(opt))
+    time, results = YoloDetection().run(**vars(opt))
 
 
 if __name__ == "__main__":
