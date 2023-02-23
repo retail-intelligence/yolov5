@@ -17,6 +17,17 @@
             ]
         },
         {
+            "name": "detect_img",
+            "type": "python",
+            "request": "launch",
+            "program": "detect.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--source=/home/eduardo/Downloads/people.jpeg",
+                "--save-bbox-conf-cls",
+            ]
+        },
+        {
             "name": "segment_predict",
             "type": "python",
             "request": "launch",
@@ -27,6 +38,7 @@
                 "--source=data/video/video.mp4",
                 "--save-bbox-conf-cls",
             ]
-        }
+        },
+        
     ]
 }
