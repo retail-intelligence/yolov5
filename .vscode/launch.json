@@ -25,7 +25,6 @@
             "args": [
                 "--source=/home/eduardo/Downloads/people.jpeg",
                 "--save-bbox-conf-cls",
-                "--view-img"
             ]
         },
         {
