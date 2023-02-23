@@ -5,7 +5,7 @@ from setuptools import setup
 setup(name='Yolov5',
       version='1.0',
       description='Retail Intelligence Yolo version 5',
-      author='Ultralytics',
+      author='Nautec',
       packages=find_packages(),
-      url='https://github.com/ultralytics/yolov5',
+      url='https://github.com/retail-intelligence/yolov5',
     )
