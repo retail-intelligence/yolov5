@@ -337,6 +337,65 @@ class LoadImages:
 
     def __len__(self):
         return self.nf  # number of files
+    
+
+class LoadNumpy:
+    # YOLOv5 numpy dataloader, i.e. `python detect.py --source image.jpg/vid.mp4`
+    def __init__(self, np_img, img_size=640, stride=32, auto=True, transforms=None, vid_stride=1):
+        
+        self.is_list = isinstance(np_img, list)
+        if self.is_list:
+            self.nf = len(np_img)
+            self.img_size = np_img[0].shape[0]
+        else:
+            self.nf = 1 # number of files
+            self.img_size = np_img.shape[0]
+          
+        self.stride = stride
+        self.files = np_img
+        self.mode = 'image'
+        self.auto = auto
+        self.transforms = transforms  # optional
+        assert self.nf > 0, f'No images or videos found in {p}. ' \
+                            f'Supported formats are:\nimages: {IMG_FORMATS}\nvideos: {VID_FORMATS}'
+
+    def __iter__(self):
+        self.count = 0
+        return self
+
+    def __next__(self):
+        if self.count == self.nf:
+            raise StopIteration
+        if self.is_list:
+            im0 = self.files[self.count]
+        else:
+            im0 = self.files
+        self.count += 1
+        path = f'numpy_image_{self.count}.png'
+        assert im0 is not None, f'Image Not Found {path}'
+        s = f'image {self.count}/{self.nf} {path}: '
+
+        if self.transforms:
+            im = self.transforms(im0)  # transforms
+        else:
+            im = letterbox(im0, self.img_size, stride=self.stride, auto=self.auto)[0]  # padded resize
+            im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+            im = np.ascontiguousarray(im)  # contiguous
+
+        return path, im, im0, None, s
+
+    def _cv2_rotate(self, im):
+        # Rotate a cv2 video manually
+        if self.orientation == 0:
+            return cv2.rotate(im, cv2.ROTATE_90_CLOCKWISE)
+        elif self.orientation == 180:
+            return cv2.rotate(im, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        elif self.orientation == 90:
+            return cv2.rotate(im, cv2.ROTATE_180)
+        return im
+
+    def __len__(self):
+        return self.nf  # number of files
 
 
 class LoadStreams:
