@@ -54,6 +54,21 @@ from utils.torch_utils import select_device, smart_inference_mode
 
 class YoloDetection():
 
+    def __init__(self,
+                 weights=ROOT / 'yolov5s.pt',  # model path or triton URL
+                 device='',  # cuda device, i.e. 0 or 0,1,2,3 or cpu):
+                 dnn=False,  # use OpenCV DNN for ONNX inference
+                 data=ROOT / 'data/coco128.yaml',  # dataset.yaml path
+                 half=False,  # use FP16 half-precision inference
+                 imgsz=(640, 640)):  # inference size (height, width)
+        
+        # Load model
+        device = select_device(device)
+        self.model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half)
+        self.stride, self.names, self.pt = self.model.stride, self.model.names, self.model.pt
+        self.imgsz = check_img_size(imgsz, s=self.stride)  # check image size
+
+
     @smart_inference_mode()
     def run(self,
             save_bbox_conf_cls=False, # save bboxes, confidences and classes to *.txt
@@ -106,33 +121,27 @@ class YoloDetection():
         (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
         (save_dir / 'info' if save_bbox_conf_cls else save_dir).mkdir(parents=True, exist_ok=True) # make info dir
 
-        # Load model
-        device = select_device(device)
-        model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half)
-        stride, names, pt = model.stride, model.names, model.pt
-        imgsz = check_img_size(imgsz, s=stride)  # check image size
-
         # Dataloader
         bs = 1  # batch_size
         if is_numpy:
-            dataset = LoadNumpy(np_source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
+            dataset = LoadNumpy(np_source, img_size=self.imgsz, stride=self.stride, auto=self.pt, vid_stride=vid_stride)
         elif webcam:
             view_img = check_imshow(warn=True)
-            dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
+            dataset = LoadStreams(source, img_size=self.imgsz, stride=self.stride, auto=self.pt, vid_stride=vid_stride)
             bs = len(dataset)
         elif screenshot:
-            dataset = LoadScreenshots(source, img_size=imgsz, stride=stride, auto=pt)
+            dataset = LoadScreenshots(source, img_size=self.imgsz, stride=self.stride, auto=self.pt)
         else:
-            dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
+            dataset = LoadImages(source, img_size=self.imgsz, stride=self.stride, auto=self.pt, vid_stride=vid_stride)
         vid_path, vid_writer = [None] * bs, [None] * bs
 
         # Run inference
-        model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
+        self.model.warmup(imgsz=(1 if self.pt or self.model.triton else bs, 3, *self.imgsz))  # warmup
         seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
         for path, im, im0s, vid_cap, s in dataset:
             with dt[0]:
-                im = torch.from_numpy(im).to(model.device)
-                im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
+                im = torch.from_numpy(im).to(self.model.device)
+                im = im.half() if self.model.fp16 else im.float()  # uint8 to fp16/32
                 im /= 255  # 0 - 255 to 0.0 - 1.0
                 if len(im.shape) == 3:
                     im = im[None]  # expand for batch dim
@@ -140,7 +149,7 @@ class YoloDetection():
             # Inference
             with dt[1]:
                 visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
-                pred = model(im, augment=augment, visualize=visualize)
+                pred = self.model(im, augment=augment, visualize=visualize)
 
             # NMS
             with dt[2]:
@@ -167,7 +176,7 @@ class YoloDetection():
                 s += '%gx%g ' % im.shape[2:]  # print string
                 gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
                 imc = im0.copy() if save_crop else im0  # for save_crop
-                annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+                annotator = Annotator(im0, line_width=line_thickness, example=str(self.names))
                 if len(det):
                     # Rescale boxes from img_size to im0 size
                     det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
@@ -175,7 +184,7 @@ class YoloDetection():
                     # Print results
                     for c in det[:, 5].unique():
                         n = (det[:, 5] == c).sum()  # detections per class
-                        s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                        s += f"{n} {self.names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
                     # Write results
 
@@ -199,10 +208,10 @@ class YoloDetection():
 
                         if save_img or save_crop or view_img:  # Add bbox to image
                             c = int(cls)  # integer class
-                            label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
+                            label = None if hide_labels else (self.names[c] if hide_conf else f'{self.names[c]} {conf:.2f}')
                             annotator.box_label(xyxy, label, color=colors(c, True))
                         if save_crop:
-                            save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
+                            save_one_box(xyxy, imc, file=save_dir / 'crops' / self.names[c] / f'{p.stem}.jpg', BGR=True)
 
                 # Stream results
                 im0 = annotator.result()
@@ -238,7 +247,7 @@ class YoloDetection():
 
         # Print results
         t = tuple(x.t / seen * 1E3 for x in dt)  # speeds per image
-        LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {(1, 3, *imgsz)}' % t)
+        LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {(1, 3, *self.imgsz)}' % t)
         if save_txt or save_img:
             s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ''
             LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
