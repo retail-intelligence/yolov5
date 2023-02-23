@@ -34,6 +34,8 @@ import platform
 import sys
 from datetime import datetime
 from pathlib import Path
+import cv2
+import numpy as np
 
 import torch
 
@@ -44,19 +46,16 @@ if str(ROOT) not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 from models.common import DetectMultiBackend
-from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams
+from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams, LoadNumpy
 from utils.general import (LOGGER, Profile, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
                            increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, smart_inference_mode
 
 class YoloDetection():
-    
-    def __init__(self):
-        pass
 
     @smart_inference_mode()
-    def run(
+    def run(self,
             save_bbox_conf_cls=False, # save bboxes, confidences and classes to *.txt
             weights=ROOT / 'yolov5s.pt',  # model path or triton URL
             source=ROOT / 'data/images',  # file/dir/URL/glob/screen/0(webcam)
@@ -86,6 +85,13 @@ class YoloDetection():
             dnn=False,  # use OpenCV DNN for ONNX inference
             vid_stride=1,  # video frame-rate stride
     ):
+        
+        is_numpy = False
+
+        if type(source)==type(np.zeros(0)) or type(source)==type([]):
+            is_numpy = True 
+            np_source = source
+        
         source = str(source)
         save_img = not nosave and not source.endswith('.txt')  # save inference images
         is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
@@ -108,7 +114,9 @@ class YoloDetection():
 
         # Dataloader
         bs = 1  # batch_size
-        if webcam:
+        if is_numpy:
+            dataset = LoadNumpy(np_source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
+        elif webcam:
             view_img = check_imshow(warn=True)
             dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
             bs = len(dataset)
@@ -276,9 +284,12 @@ def parse_opt():
 
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
-    run(**vars(opt))
+    YoloDetection().run(**vars(opt))
 
 
 if __name__ == "__main__":
     opt = parse_opt()
+    img = cv2.imread('/home/eduardo/Downloads/people.jpeg')
+    opt.source = [img, img, img]
+    print(f'   ===============>  {type(opt.source)}')
     main(opt)
