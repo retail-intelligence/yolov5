@@ -157,10 +157,10 @@ class YoloDetection():
                 pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
                 
             date = datetime.now() # for saving time of detection
-
+            time = f"{date.strftime('%Y%m%d%H%M%S%f')[:-3]}"
             # Second-stage classifier (optional)
             # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
-
+            
             # Process predictions
             for i, det in enumerate(pred):  # per image
                 seen += 1
@@ -178,6 +178,7 @@ class YoloDetection():
                 gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
                 imc = im0.copy() if save_crop else im0  # for save_crop
                 annotator = Annotator(im0, line_width=line_thickness, example=str(self.names))
+                
                 if len(det):
                     # Rescale boxes from img_size to im0 size
                     det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
@@ -192,19 +193,22 @@ class YoloDetection():
                     # Saves time in .txt file containing bbox, confidences and classes
                     if save_bbox_conf_cls:
                         with open(f'{info_path}','a') as f:
-                            time = f"{date.strftime('%Y%m%d%H%M%S%f')[:-3]}"
+                            
                             f.write(f"{date.strftime('%Y%m%d%H%M%S%f')[:-3]}\n")
-                    
+                            
                     det_list = []
                     for j, (*xyxy, conf, cls) in enumerate(reversed(det)):
+
+                        det_string = ''
+                        for value in range(len(det[j,:6])):
+                            det_string += str(det[j,:6][value].item())+' '
+                        det_list.append(det_string)
+
                         if save_bbox_conf_cls:  # Write bbox, confidences and classes to file
                             with open(f'{info_path}','a') as f:
-                                det_string = ''
                                 for value in range(len(det[j,:6])):
-                                    det_string += str(det[j,:6][value].item())+' '
                                     f.write(str(det[j,:6][value].item())+' ')
                                 f.write("\n")
-                                det_list.append(det_string)
 
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
@@ -248,7 +252,7 @@ class YoloDetection():
                             vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                         vid_writer[i].write(im0)
 
-                result_list.append(det_list)
+            result_list.append(det_list)
 
             # Print time (inference-only)
             LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1E3:.1f}ms")
