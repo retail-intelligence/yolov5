@@ -350,7 +350,8 @@ class LoadNumpy:
         else:
             self.nf = 1 # number of files
             self.img_size = np_img.shape[0]
-          
+        
+        self.img_size = (img_size[0],img_size[1])
         self.stride = stride
         self.files = np_img
         self.mode = 'image'
@@ -371,7 +372,8 @@ class LoadNumpy:
         else:
             im0 = self.files
         self.count += 1
-        path = f'numpy_image_{self.count}.png'
+        # path = f'numpy_image_{self.count}.png'
+        path = ''
         assert im0 is not None, f'Image Not Found {path}'
         s = f'image {self.count}/{self.nf} {path}: '
 
