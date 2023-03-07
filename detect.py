@@ -266,7 +266,7 @@ class YoloDetection():
                             self.vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                         self.vid_writer[i].write(im0)
             if len(det):
-                result_list = det_list
+                result_list.append(det_list)
 
             # Print time (inference-only)
             LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{self.dt[1].dt * 1E3:.1f}ms")
