@@ -213,10 +213,10 @@ class YoloDetection():
                     det_list = []
                     for j, (*xyxy, conf, cls) in enumerate(reversed(det)):
 
-                        det_string = ''
+                        detection = []
                         for value in range(len(det[j,:6])):
-                            det_string += str(det[j,:6][value].item())+' '
-                        det_list.append(det_string)
+                            detection.append(det[j,:6][value].item())
+                        det_list.append(detection)
 
                         if save_bbox_conf_cls:  # Write bbox, confidences and classes to file
                             with open(f'{info_path}','a') as f:
@@ -266,7 +266,7 @@ class YoloDetection():
                             self.vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                         self.vid_writer[i].write(im0)
             if len(det):
-                result_list.append(det_list)
+                result_list = det_list
 
             # Print time (inference-only)
             LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{self.dt[1].dt * 1E3:.1f}ms")
