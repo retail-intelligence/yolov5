@@ -213,10 +213,10 @@ class YoloDetection():
                     det_list = []
                     for j, (*xyxy, conf, cls) in enumerate(reversed(det)):
 
-                        det_string = ''
+                        detection = []
                         for value in range(len(det[j,:6])):
-                            det_string += str(det[j,:6][value].item())+' '
-                        det_list.append(det_string)
+                            detection.append(det[j,:6][value].item())
+                        det_list.append(detection)
 
                         if save_bbox_conf_cls:  # Write bbox, confidences and classes to file
                             with open(f'{info_path}','a') as f:
