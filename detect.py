@@ -88,8 +88,8 @@ class YoloDetection():
 
         # Dataloader
         is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
-        is_url = source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
-        self.webcam = source.isnumeric() or source.endswith('.streams') or (is_url and not is_file)
+        is_url = str(source).lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
+        self.webcam = str(source).isnumeric() or str(source).endswith('.streams') or (is_url and not is_file)
         
         bs = 1  # batch_size
         if self.webcam:    
