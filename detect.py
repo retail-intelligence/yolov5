@@ -102,8 +102,10 @@ class YoloDetection():
     def _load_video(self, path) -> list:
         vidcap = cv2.VideoCapture(path)
         success,image = vidcap.read()
+        if not success:
+            raise NameError("Could not open video.")
         img_list = []
-        success = True
+        img_list.append(image)
         while success:
             success,image = vidcap.read()
             if success:
