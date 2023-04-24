@@ -99,6 +99,17 @@ class YoloDetection():
         self.seen, self.window, self.dt = 0, [], (Profile(), Profile(), Profile())
         
 
+    def _load_video(self, path) -> list:
+        vidcap = cv2.VideoCapture(path)
+        success,image = vidcap.read()
+        img_list = []
+        success = True
+        while success:
+            success,image = vidcap.read()
+            if success:
+                img_list.append(image)
+        return img_list
+
     @smart_inference_mode()
     def run(self,
             source=ROOT / 'data/images',  # file/dir/URL/glob/screen/0(webcam)
@@ -122,11 +133,15 @@ class YoloDetection():
             hide_conf=False,  # hide confidences
     ):
         
+        is_numpy = False
         if type(source)==type(np.zeros(0)) or type(source)==type([]):
             is_numpy = True 
-            np_source = source
+            np_source = source    
         
         source = str(source)
+        if source.endswith('.mp4') or source.endswith('.api'):
+            is_numpy = True
+            np_source = self._load_video(source)
         self.save_img = not nosave and not source.endswith('.txt')  # save inference images
         is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
         is_url = source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
@@ -321,12 +336,24 @@ def parse_opt():
 
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
-    time, results = YoloDetection().run(**vars(opt))
+    time, results = YoloDetection().run(
+        source=opt.source,
+        save_bbox_conf_cls=opt.save_bbox_conf_cls,
+        data=opt.data,
+        imgsz=opt.imgsz,
+        conf_thres=opt.conf_thres,
+        iou_thres=opt.iou_thres,
+        nosave=opt.nosave,
+        save_conf=opt.save_conf,
+        save_crop=opt.save_crop,
+        classes=opt.classes,
+        agnostic_nms=opt.agnostic_nms,
+    )
 
 
 if __name__ == "__main__":
     opt = parse_opt()
-    img = cv2.imread('/home/eduardo/Downloads/people.jpeg')
-    opt.source = [img, img, img]
+    # img = cv2.imread('/home/eduardo/Downloads/people.jpeg')
+    # opt.source = [img, img, img]
     print(f'   ===============>  {type(opt.source)}')
     main(opt)
