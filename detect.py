@@ -116,8 +116,6 @@ class YoloDetection():
     def run(self,
             source=ROOT / 'data/images',  # file/dir/URL/glob/screen/0(webcam)
             save_bbox_conf_cls=False, # save bboxes, confidences and classes to *.txt
-            data=ROOT / 'data/coco128.yaml',  # dataset.yaml path
-            imgsz=(640, 640),  # inference size (height, width)
             conf_thres=0.25,  # confidence threshold
             iou_thres=0.45,  # NMS IOU threshold
             max_det=1000,  # maximum detections per image
@@ -135,36 +133,17 @@ class YoloDetection():
             hide_conf=False,  # hide confidences
     ):
         
-        is_numpy = False
         if type(source)==type(np.zeros(0)) or type(source)==type([]):
-            is_numpy = True 
             np_source = source    
+        else:
+            source = str(source)
+            if source.endswith('.mp4') or source.endswith('.api'):
+                np_source = self._load_video(source)
         
-        source = str(source)
-        if source.endswith('.mp4') or source.endswith('.api'):
-            is_numpy = True
-            np_source = self._load_video(source)
-        self.save_img = not nosave and not source.endswith('.txt')  # save inference images
-        is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
-        is_url = source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
-        self.webcam = source.isnumeric() or source.endswith('.streams') or (is_url and not is_file)
-        screenshot = source.lower().startswith('screen')
-        if is_url and is_file:
-            source = check_file(source)  # download
+        self.save_img = not nosave # save inference images
         
         # Dataloader
-        bs = 1  # batch_size
-        if is_numpy:
-            self.dataset = LoadNumpy(np_source, img_size=self.imgsz, stride=self.stride, auto=self.pt, vid_stride=vid_stride)
-        elif self.webcam:
-            self.view_img = check_imshow(warn=True)
-            self.dataset = LoadStreams(source, img_size=self.imgsz, stride=self.stride, auto=self.pt, vid_stride=vid_stride)
-            bs = len(self.dataset)
-        elif screenshot:
-            self.dataset = LoadScreenshots(source, img_size=self.imgsz, stride=self.stride, auto=self.pt)
-        else:
-            self.dataset = LoadImages(source, img_size=self.imgsz, stride=self.stride, auto=self.pt, vid_stride=vid_stride)
-        self.vid_path, self.vid_writer = [None] * bs, [None] * bs
+        self.dataset = LoadNumpy(np_source, img_size=self.imgsz, stride=self.stride, auto=self.pt, vid_stride=vid_stride)
 
         # Run inference
         result_list = []
