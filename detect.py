@@ -39,6 +39,8 @@ import numpy as np
 
 import torch
 
+from utils.augmentations import letterbox
+
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
@@ -112,6 +114,28 @@ class YoloDetection():
                 img_list.append(image)
         return img_list
 
+
+    def _format_data(self, np_img, stride=32, auto=True, transforms=None, vid_stride=1):
+        
+        img_size = np_img.shape[0]        
+        stride = stride
+        auto = auto
+        transforms = transforms  # optional
+
+        im0 = np_img
+        if transforms:
+            im = transforms(im0)  # transforms
+        else:
+            im = letterbox(im0, img_size, stride=stride, auto=auto)[0]  # padded resize
+            im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+            im = np.ascontiguousarray(im)  # contiguous
+        path = ''
+        image_counter_string = ''
+
+        return path, im, im0, None, image_counter_string
+        
+        pass
+
     @smart_inference_mode()
     def run(self,
             source=ROOT / 'data/images',  # file/dir/URL/glob/screen/0(webcam)
@@ -143,130 +167,132 @@ class YoloDetection():
         self.save_img = not nosave # save inference images
         
         # Dataloader
-        self.dataset = LoadNumpy(np_source, img_size=self.imgsz, stride=self.stride, auto=self.pt, vid_stride=vid_stride)
+        # self.dataset = LoadNumpy(np_source, img_size=self.imgsz, stride=self.stride, auto=self.pt, vid_stride=vid_stride)
 
         # Run inference
         result_list = []
         
-        for path, im, im0s, vid_cap, s in self.dataset:
+        path, im, im0s, vid_cap, s = self._format_data(np_source)
             
-            with self.dt[0]:
-                im = torch.from_numpy(im).to(self.model.device)
-                im = im.half() if self.model.fp16 else im.float()  # uint8 to fp16/32
-                im /= 255  # 0 - 255 to 0.0 - 1.0
-                if len(im.shape) == 3:
-                    im = im[None]  # expand for batch dim
+        with self.dt[0]:
+            im = torch.from_numpy(im).to(self.model.device)
+            im = im.half() if self.model.fp16 else im.float()  # uint8 to fp16/32
+            im /= 255  # 0 - 255 to 0.0 - 1.0
+            if len(im.shape) == 3:
+                im = im[None]  # expand for batch dim
 
-            # Inference
-            with self.dt[1]:
-                visualize = increment_path(self.save_dir / Path(path).stem, mkdir=True) if visualize else False
-                pred = self.model(im, augment=augment, visualize=visualize)
+        # Inference
+        with self.dt[1]:
+            visualize = increment_path(self.save_dir / Path(path).stem, mkdir=True) if visualize else False
+            pred = self.model(im, augment=augment, visualize=visualize)
 
-            # NMS
-            with self.dt[2]:
-                pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
+        # NMS
+        with self.dt[2]:
+            pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
 
-            date = datetime.now() # for saving time of detection
-            time = f"{date.strftime('%Y%m%d%H%M%S%f')[:-3]}"
-            # Second-stage classifier (optional)
-            # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
+        date = datetime.now() # for saving time of detection
+        time = f"{date.strftime('%Y%m%d%H%M%S%f')[:-3]}"
+        # Second-stage classifier (optional)
+        # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
+        
+        # Process predictions
+        for i, det in enumerate(pred):  # per image
+            self.seen += 1
+            if self.webcam:  # batch_size >= 1
+                p, im0, frame = path[i], im0s[i].copy(), self.dataset.count
+                s += f'{i}: '
+            else:
+                p, im0, frame = path, im0s.copy(), getattr(self.dataset, 'frame', 0)
+
+            p = Path(p)  # to Path
+            save_path = str(self.save_dir / p.name)  # im.jpg
+            txt_path = str(self.save_dir / 'labels' / p.stem) + ('' if self.dataset.mode == 'image' else f'_{frame}')  # im.txt
+            info_path = str(self.save_dir / 'info' / p.stem) + ('' if self.dataset.mode == 'image' else f'_{str(frame).zfill(6)}')  # infos.txt
+            s += '%gx%g ' % im.shape[2:]  # print string
+            gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
+            imc = im0.copy() if save_crop else im0  # for save_crop
+            annotator = Annotator(im0, line_width=line_thickness, example=str(self.names))
             
-            # Process predictions
-            for i, det in enumerate(pred):  # per image
-                self.seen += 1
-                if self.webcam:  # batch_size >= 1
-                    p, im0, frame = path[i], im0s[i].copy(), self.dataset.count
-                    s += f'{i}: '
-                else:
-                    p, im0, frame = path, im0s.copy(), getattr(self.dataset, 'frame', 0)
-
-                p = Path(p)  # to Path
-                save_path = str(self.save_dir / p.name)  # im.jpg
-                txt_path = str(self.save_dir / 'labels' / p.stem) + ('' if self.dataset.mode == 'image' else f'_{frame}')  # im.txt
-                info_path = str(self.save_dir / 'info' / p.stem) + ('' if self.dataset.mode == 'image' else f'_{str(frame).zfill(6)}')  # infos.txt
-                s += '%gx%g ' % im.shape[2:]  # print string
-                gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
-                imc = im0.copy() if save_crop else im0  # for save_crop
-                annotator = Annotator(im0, line_width=line_thickness, example=str(self.names))
-                
-                if len(det):
-                    # Rescale boxes from img_size to im0 size
-                    det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
-
-                    # Print results
-                    for c in det[:, 5].unique():
-                        n = (det[:, 5] == c).sum()  # detections per class
-                        s += f"{n} {self.names[int(c)]}{'s' * (n > 1)}, "  # add to string
-
-                    # Write results
-
-                    # Saves time in .txt file containing bbox, confidences and classes
-                    if save_bbox_conf_cls:
-                        with open(f'{info_path}','a') as f:
-                            
-                            f.write(f"{date.strftime('%Y%m%d%H%M%S%f')[:-3]}\n")
-                            
-                    det_list = []
-                    for j, (*xyxy, conf, cls) in enumerate(reversed(det)):
-
-                        detection = []
-                        for value in range(len(det[j,:6])):
-                            detection.append(det[j,:6][value].item())
-                        det_list.append(detection)
-
-                        if save_bbox_conf_cls:  # Write bbox, confidences and classes to file
-                            with open(f'{info_path}','a') as f:
-                                for value in range(len(det[j,:6])):
-                                    f.write(str(det[j,:6][value].item())+' ')
-                                f.write("\n")
-
-                        if self.save_txt:  # Write to file
-                            xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-                            line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
-                            with open(f'{txt_path}.txt', 'a') as f:
-                                f.write(('%g ' * len(line)).rstrip() % line + '\n')
-
-                        if self.save_img or save_crop or self.view_img:  # Add bbox to image
-                            c = int(cls)  # integer class
-                            label = None if hide_labels else (self.names[c] if hide_conf else f'{self.names[c]} {conf:.2f}')
-                            annotator.box_label(xyxy, label, color=colors(c, True))
-                        if save_crop:
-                            save_one_box(xyxy, imc, file=self.save_dir / 'crops' / self.names[c] / f'{p.stem}.jpg', BGR=True)
-
-                # Stream results
-                im0 = annotator.result()
-                if self.view_img:
-                    if platform.system() == 'Linux' and p not in self.window:
-                        self.window.append(p)
-                        cv2.namedWindow(str(p), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)  # allow window resize (Linux)
-                        cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
-                    cv2.imshow(str(p), im0)
-                    cv2.waitKey(1)  # 1 millisecond
-
-                # Save results (image with detections)
-                if self.save_img:
-                    if self.dataset.mode == 'image':
-                        cv2.imwrite(save_path, im0)
-                    else:  # 'video' or 'stream'
-                        if self.vid_path[i] != save_path:  # new video
-                            self.vid_path[i] = save_path
-                            if isinstance(self.vid_writer[i], cv2.VideoWriter):
-                                self.vid_writer[i].release()  # release previous video writer
-                            if vid_cap:  # video
-                                fps = vid_cap.get(cv2.CAP_PROP_FPS)
-                                w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                                h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                            else:  # stream
-                                fps, w, h = 30, im0.shape[1], im0.shape[0]
-                            save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
-                            self.vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
-                        self.vid_writer[i].write(im0)
             if len(det):
-                result_list.append(det_list)
+                # Rescale boxes from img_size to im0 size
+                det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
 
-            # Print time (inference-only)
-            LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{self.dt[1].dt * 1E3:.1f}ms")
+                # Print results
+                for c in det[:, 5].unique():
+                    n = (det[:, 5] == c).sum()  # detections per class
+                    s += f"{n} {self.names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
+                # Write results
+
+                # Saves time in .txt file containing bbox, confidences and classes
+                if save_bbox_conf_cls:
+                    with open(f'{info_path}','a') as f:
+                        
+                        f.write(f"{date.strftime('%Y%m%d%H%M%S%f')[:-3]}\n")
+                        
+                det_list = []
+                for j, (*xyxy, conf, cls) in enumerate(reversed(det)):
+
+                    detection = []
+                    for value in range(len(det[j,:6])):
+                        detection.append(det[j,:6][value].item())
+                    det_list.append(detection)
+
+                    if save_bbox_conf_cls:  # Write bbox, confidences and classes to file
+                        with open(f'{info_path}','a') as f:
+                            for value in range(len(det[j,:6])):
+                                f.write(str(det[j,:6][value].item())+' ')
+                            f.write("\n")
+
+                    if self.save_txt:  # Write to file
+                        xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+                        line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
+                        with open(f'{txt_path}.txt', 'a') as f:
+                            f.write(('%g ' * len(line)).rstrip() % line + '\n')
+
+                    if self.save_img or save_crop or self.view_img:  # Add bbox to image
+                        c = int(cls)  # integer class
+                        label = None if hide_labels else (self.names[c] if hide_conf else f'{self.names[c]} {conf:.2f}')
+                        annotator.box_label(xyxy, label, color=colors(c, True))
+                    if save_crop:
+                        save_one_box(xyxy, imc, file=self.save_dir / 'crops' / self.names[c] / f'{p.stem}.jpg', BGR=True)
+
+            # Stream results
+            im0 = annotator.result()
+            if self.view_img:
+                if platform.system() == 'Linux' and p not in self.window:
+                    self.window.append(p)
+                    cv2.namedWindow(str(p), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)  # allow window resize (Linux)
+                    cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
+                cv2.imshow(str(p), im0)
+                cv2.waitKey(1)  # 1 millisecond
+
+            # Save results (image with detections)
+            if self.save_img:
+                if self.dataset.mode == 'image':
+                    cv2.imwrite(save_path, im0)
+                else:  # 'video' or 'stream'
+                    if self.vid_path[i] != save_path:  # new video
+                        self.vid_path[i] = save_path
+                        if isinstance(self.vid_writer[i], cv2.VideoWriter):
+                            self.vid_writer[i].release()  # release previous video writer
+                        if vid_cap:  # video
+                            fps = vid_cap.get(cv2.CAP_PROP_FPS)
+                            w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                            h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        else:  # stream
+                            fps, w, h = 30, im0.shape[1], im0.shape[0]
+                        save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
+                        self.vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+                    self.vid_writer[i].write(im0)
+        if len(det):
+            result_list.append(det_list)
+
+        # Print time (inference-only)
+        LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{self.dt[1].dt * 1E3:.1f}ms")
+
+        ## END of old for loop
+        
         # Print results
         t = tuple(x.t / self.seen * 1E3 for x in self.dt)  # speeds per image
         # LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {(1, 3, *self.imgsz)}' % t)
