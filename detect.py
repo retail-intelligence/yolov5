@@ -202,7 +202,7 @@ class YoloDetection():
                 p, im0, frame = path[i], im0s[i].copy(), self.dataset.count
                 s += f'{i}: '
             else:
-                p, im0, frame = path, im0s.copy(), getattr(self.dataset, 'frame', 0)
+                p, im0, frame = path, im0s.copy(), 0
 
             p = Path(p)  # to Path
             save_path = str(self.save_dir / p.name)  # im.jpg
