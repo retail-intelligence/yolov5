@@ -161,7 +161,7 @@ class YoloDetection():
             np_source = source    
         else:
             source = str(source)
-            if source.endswith('.mp4') or source.endswith('.api'):
+            if source.endswith('.mp4') or source.endswith('.avi'):
                 np_source = self._load_video(source)
         
         self.save_img = not nosave # save inference images
