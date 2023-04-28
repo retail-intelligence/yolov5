@@ -143,7 +143,7 @@ class YoloDetection():
             conf_thres=0.25,  # confidence threshold
             iou_thres=0.45,  # NMS IOU threshold
             max_det=1000,  # maximum detections per image
-            nosave=False,  # do not save images/videos
+            nosave=True,  # do not save images/videos
             save_conf=False,  # save confidences in --save-txt labels
             save_crop=False,  # save cropped prediction boxes
             classes=None,  # filter by class: --class 0, or --class 0 2 3
