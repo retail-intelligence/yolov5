@@ -198,16 +198,12 @@ class YoloDetection():
         # Process predictions
         for i, det in enumerate(pred):  # per image
             self.seen += 1
-            if self.webcam:  # batch_size >= 1
-                p, im0, frame = path[i], im0s[i].copy(), self.dataset.count
-                s += f'{i}: '
-            else:
-                p, im0, frame = path, im0s.copy(), 0
+            p, im0, frame = path, im0s.copy(), 0
 
             p = Path(p)  # to Path
             save_path = str(self.save_dir / p.name)  # im.jpg
-            txt_path = str(self.save_dir / 'labels' / p.stem) + ('' if self.dataset.mode == 'image' else f'_{frame}')  # im.txt
-            info_path = str(self.save_dir / 'info' / p.stem) + ('' if self.dataset.mode == 'image' else f'_{str(frame).zfill(6)}')  # infos.txt
+            txt_path = str(self.save_dir / 'labels' / p.stem) + f'_{frame}'  # im.txt
+            info_path = str(self.save_dir / 'info' / p.stem) + f'_{str(frame).zfill(6)}'  # infos.txt
             s += '%gx%g ' % im.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
@@ -269,22 +265,19 @@ class YoloDetection():
 
             # Save results (image with detections)
             if self.save_img:
-                if self.dataset.mode == 'image':
-                    cv2.imwrite(save_path, im0)
-                else:  # 'video' or 'stream'
-                    if self.vid_path[i] != save_path:  # new video
-                        self.vid_path[i] = save_path
-                        if isinstance(self.vid_writer[i], cv2.VideoWriter):
-                            self.vid_writer[i].release()  # release previous video writer
-                        if vid_cap:  # video
-                            fps = vid_cap.get(cv2.CAP_PROP_FPS)
-                            w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                            h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                        else:  # stream
-                            fps, w, h = 30, im0.shape[1], im0.shape[0]
-                        save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
-                        self.vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
-                    self.vid_writer[i].write(im0)
+                if self.vid_path[i] != save_path:  # new video
+                    self.vid_path[i] = save_path
+                    if isinstance(self.vid_writer[i], cv2.VideoWriter):
+                        self.vid_writer[i].release()  # release previous video writer
+                    if vid_cap:  # video
+                        fps = vid_cap.get(cv2.CAP_PROP_FPS)
+                        w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    else:  # stream
+                        fps, w, h = 30, im0.shape[1], im0.shape[0]
+                    save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
+                    self.vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+                self.vid_writer[i].write(im0)
         if len(det):
             result_list.append(det_list)
 
